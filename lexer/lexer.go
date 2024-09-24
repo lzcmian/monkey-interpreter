@@ -1,12 +1,14 @@
 package lexer
 
-import "monkey-interpreter/token"
+import (
+	"monkey-interpreter/token"
+)
 
 type Lexer struct {
 	input        string
-	position     int  // current position in input (points to current char)
-	readPosition int  // current reading position in input (after current char)
-	ch           byte // current char under examination
+	position     int  // 最后一次读取的位置
+	readPosition int  // 当前该读取的位置
+	ch           byte // 当前正在检查的字符 == input[position]
 }
 
 func New(input string) *Lexer {
@@ -19,43 +21,79 @@ func (l *Lexer) NextToken() token.Token {
 	var tok token.Token
 	l.skipWhiteSpace() // 跳过所有空白符
 	switch l.ch {
-	// =+,;(){}
 	case '=':
-		tok = newToken(token.ASSIGN, "=")
+		if l.peekChar() == '=' { // ==
+			l.readChar()
+			tok = token.Token{Type: token.EQ, Literal: "=="}
+		} else {
+			tok = newToken(token.ASSIGN, '=')
+		}
 	case '+':
-		tok = newToken(token.PLUS, "+")
+		tok = newToken(token.PLUS, '+')
+	case '-':
+		tok = newToken(token.MINUS, '-')
+	case '!':
+		if l.peekChar() == '=' { // !=
+			l.readChar()
+			tok = token.Token{Type: token.NOT_EQ, Literal: "!="}
+		} else {
+			tok = newToken(token.BANG, '!')
+		}
+	case '/':
+		tok = newToken(token.SLASH, '/')
+	case '*':
+		tok = newToken(token.ASTERISK, '*')
+	case '<':
+		tok = newToken(token.LT, '<')
+	case '>':
+		tok = newToken(token.GT, '>')
 	case ',':
-		tok = newToken()
+		tok = newToken(token.COMMA, ',')
 	case ';':
-		tok = newToken()
+		tok = newToken(token.SEMICOLON, ';')
 	case '(':
-		tok = newToken()
+		tok = newToken(token.LPAREN, '(')
 	case ')':
-		tok = newToken()
+		tok = newToken(token.RPAREN, ')')
 	case '{':
-		tok = newToken()
+		tok = newToken(token.LBRACE, '{')
 	case '}':
-		tok = newToken()
+		tok = newToken(token.RBRACE, '}')
 
 	// Identifiers + literals + Keywords
 	default:
-		if isLetter(l.ch){  // 以字母开头，只有可能是关键词或标识符（变量名）
+		if isLetter(l.ch) { // 以字母开头，只有可能是关键词或标识符（变量名）
 			tok.Literal = l.readIdentifier()
 			tok.Type = token.LookUpType(tok.Literal)
-			// ret ?
-		} else if isDigit(l.ch){
-			tok = newToken(token.INT, l.readNumber())
-			// ret ?
-		}else{  // 未知情况 => 非法
+			return tok // 提前return，因为 readIdentifier() 已经将 readPosition 移到下一个字符了
+		} else if isDigit(l.ch) {
+			tok.Literal = l.readNumber()
+			tok.Type = token.INT
+			return tok // 提前return，因为 readIdentifier() 已经将 readPosition 移到下一个字符了
+		} else if l.ch == 0 { // 读完了
+			tok.Literal = ""
+			tok.Type = token.EOF
+		} else { // 未知情况 => 非法
 			tok = newToken(token.ILLEGAL, l.ch)
-
 		}
 
-
 	}
+	l.readChar()
+	return tok
 
 }
 
+// isLetter 判断 ch 是否是字母
+func isLetter(ch byte) bool {
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z'
+}
+
+// isDigit 判断 ch 是否是数字
+func isDigit(ch byte) bool {
+	return '0' <= ch && ch <= '9'
+}
+
+// newToken 返回一个单字符字面量的 token
 func newToken(tokenType token.TokenType, ch byte) token.Token {
 	return token.Token{
 		Type:    tokenType,
@@ -73,4 +111,35 @@ func (l *Lexer) readChar() {
 
 	l.position = l.readPosition
 	l.readPosition++
+}
+
+// readIdentifier 读取标识符（变量名、关键词）, 并将 read
+func (l *Lexer) readIdentifier() string {
+	cur := l.position
+	for isLetter(l.ch) {
+		l.readChar()
+	}
+	return l.input[cur:l.position]
+}
+
+func (l *Lexer) readNumber() string {
+	cur := l.position
+	for isDigit(l.ch) {
+		l.readChar()
+	}
+	return l.input[cur:l.position]
+}
+
+// skipWhiteSpace 跳过所有空白符,
+func (l *Lexer) skipWhiteSpace() {
+	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
+		l.readChar()
+	}
+}
+
+func (l *Lexer) peekChar() byte {
+	if l.readPosition >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPosition]
 }

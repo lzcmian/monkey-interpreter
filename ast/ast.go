@@ -1,19 +1,25 @@
 package ast
 
-import "monkey-interpreter/token"
+import (
+	"bytes"
+	"monkey-interpreter/token"
+)
 
 type Node interface {
-	TokenLiteral() string
+	TokenLiteral() string // 仅用于调试和测试
+	String() string
 }
 
 type Statement interface {
 	Node
-	statementNode()
+	statementNode() // 占位方法，
 }
 
 type Expression interface {
 	Node
-	expressionNode()
+	expressionNode() // 占位方法，作用是当我们拿到一个Expression接口的值时，我们可以确信他一定是一个表达式，而不是一个语句。
+	// 我认为这个只是在开发初期避免犯错的一种临时措施。我们总是喜欢先定义接口，但是还没想好所有应该有的方法，这导致了两个接口具有相同的方法集，容易导致混淆。
+
 }
 
 type Program struct {
@@ -28,6 +34,14 @@ func (p *Program) TokenLiteral() string {
 	}
 }
 
+func (p *Program) String() string {
+	var out bytes.Buffer
+	for _, s := range p.Statements {
+		out.WriteString(s.String())
+	}
+	return out.String()
+}
+
 type LetStatement struct {
 	// e.g. let x = 5 + 1;
 	Token token.Token // "let"
@@ -37,6 +51,19 @@ type LetStatement struct {
 
 func (ls *LetStatement) statementNode()       {}
 func (ls *LetStatement) TokenLiteral() string { return ls.Token.Literal }
+func (ls *LetStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(ls.TokenLiteral() + " ")
+	out.WriteString(ls.Name.String())
+	out.WriteString(" = ")
+
+	if ls.Value != nil { // todo: ? 为什么这里有可能是 nil? 书中没有详细解释 p51
+		out.WriteString(ls.Value.String())
+	}
+	out.WriteString(";")
+	return out.String()
+}
 
 type Identifier struct {
 	Token token.Token // token.IDENT词法单元
@@ -45,6 +72,7 @@ type Identifier struct {
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
+func (i *Identifier) String() string       { return i.Value }
 
 // ast/ast.go
 
@@ -56,3 +84,32 @@ type ReturnStatement struct {
 
 func (rs *ReturnStatement) statementNode()       {}
 func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
+func (rs *ReturnStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(rs.TokenLiteral() + " ")
+
+	if rs.ReturnValue != nil {
+		out.WriteString(rs.ReturnValue.String())
+	}
+	out.WriteString(";")
+
+	return out.String()
+}
+
+// ExpressionStatement monkey 语言支持一个表达式独立成为一条语句，如下：
+// let x = 5;
+// x + 10;
+type ExpressionStatement struct {
+	Token      token.Token // 表达式中的第一个 token, 上例中为 x
+	Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode()       {}
+func (es *ExpressionStatement) TokenLiteral() string { return es.Token.Literal }
+func (es *ExpressionStatement) String() string {
+	if es.Expression != nil {
+		return es.Expression.String()
+	}
+	return ""
+}

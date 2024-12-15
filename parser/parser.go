@@ -9,11 +9,25 @@ import (
 	"monkey-interpreter/token"
 )
 
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // > or >
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -X or !X
+	CALL        // myFunction(X)
+)
+
 type Parser struct {
 	l         *lexer.Lexer // 用于解析的词法分析器
 	errors    []string     // 用于存储解析过程中的错误信息
 	curToken  token.Token  // 表示当前正在检查的词法单元，它会决定下一步的动作
 	peekToken token.Token  // 表示下一个要检查的词法单元
+
+	prefixParseFns map[token.TokenType]prefixParseFn
+	infixParseFns  map[token.TokenType]infixParseFn
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -22,6 +36,9 @@ func New(l *lexer.Lexer) *Parser {
 	// 读取两个词法单元，以设置curToken和peekToken
 	p.nextToken()
 	p.nextToken()
+
+	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
 
 	return p
 }
@@ -65,8 +82,36 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
+		// 因为Monkey语言实际上只有两种表达式，不是 let 表达式，就是return 表达式，所有当
+		// 不知道生出何处时，就开始解析 expression statement 吧~
+		return p.parseExpressionStatement()
+
+	}
+}
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParseFns[p.curToken.Type]
+	if prefix == nil {
 		return nil
 	}
+	leftExp := prefix()
+	return leftExp
 }
 
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
@@ -113,6 +158,13 @@ func (p *Parser) peekTokenIs(t token.TokenType) bool {
 	return p.peekToken.Type == t
 }
 
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
+}
+
 // expectPeek 若下一个 token 则前进一步，否则添加错误信息
 func (p *Parser) expectPeek(t token.TokenType) bool {
 	if p.peekTokenIs(t) {
@@ -123,3 +175,8 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 		return false
 	}
 }
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)

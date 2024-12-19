@@ -56,6 +56,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -72,6 +73,18 @@ func New(l *lexer.Lexer) *Parser {
 
 func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
+}
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	// 你可能有疑问：为什么不处理右括号？因为表达式解析的语义就是想让你停留在表达式的最后一个token上。
+	// 你可以看看 ParseProgram 函数，他会处理你遗留的右括号的。
+	// 还有 parseExpression 函数的 for 循环也是同理，我给你留下了注释，good luck~
+	p.nextToken()
+
+	exp := p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	return exp
 }
 
 func (p *Parser) peekPrecedence() int {
@@ -159,6 +172,9 @@ func (p *Parser) parseStatement() ast.Statement {
 
 	}
 }
+
+// parseExpressionStatement 解析一个表达式语句，并且停留在该表达式的最后一个token上
+// 若该表达式以分号结尾，则停留在分号上，总之是表达式的最后一个token
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
@@ -190,7 +206,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			return leftExp
 		}
 
-		p.nextToken()
+		p.nextToken() // 上一个表达式解析完会停留在那个表达式的最后一个token上，故跳过
 		leftExp = infix(leftExp)
 	}
 	return leftExp

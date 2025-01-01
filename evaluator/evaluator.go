@@ -25,7 +25,6 @@ func Eval(node ast.Node) object.Object {
 		} else {
 			return FALSE
 		}
-
 	case *ast.PrefixExpression:
 		right := Eval(node.Right)
 		return evalPrefixExpression(node.Operator, right)
@@ -33,8 +32,36 @@ func Eval(node ast.Node) object.Object {
 		left := Eval(node.Left)
 		right := Eval(node.Right)
 		return evalInfixExpression(node.Operator, left, right)
+	case *ast.BlockStatement:
+		return evalStatements(node.Statements)
+	case *ast.IfExpression:
+		return evalIfExpression(node)
 	default:
 		return nil
+	}
+}
+
+func evalIfExpression(ie *ast.IfExpression) object.Object {
+	condition := Eval(ie.Condition)
+	if isTruthy(condition) {
+		return Eval(ie.Consequence)
+	} else if ie.Alternative != nil {
+		return Eval(ie.Alternative)
+	} else {
+		return NULL
+	}
+}
+
+func isTruthy(obj object.Object) bool {
+	switch obj {
+	case NULL:
+		return false
+	case TRUE:
+		return true
+	case FALSE:
+		return false
+	default:
+		return true
 	}
 }
 func evalInfixExpression(operator string, left, right object.Object) object.Object {
@@ -45,10 +72,10 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 		leftVal := left.(*object.Boolean).Value
 		rightVal := right.(*object.Boolean).Value
 		if operator == "==" {
-			return &object.Boolean{Value: leftVal == rightVal}
+			return nativeBooleanToObject(leftVal == rightVal)
 		}
 		if operator == "!=" {
-			return &object.Boolean{Value: leftVal != rightVal}
+			return nativeBooleanToObject(leftVal != rightVal)
 		}
 		return NULL
 	default:
@@ -70,15 +97,23 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 	case "/":
 		return &object.Integer{Value: leftVal / rightVal}
 	case "<":
-		return &object.Boolean{Value: leftVal < rightVal}
+		return nativeBooleanToObject(leftVal < rightVal)
 	case ">":
-		return &object.Boolean{Value: leftVal > rightVal}
+		return nativeBooleanToObject(leftVal > rightVal)
 	case "==":
-		return &object.Boolean{Value: leftVal == rightVal}
+		return nativeBooleanToObject(leftVal == rightVal)
 	case "!=":
-		return &object.Boolean{Value: leftVal != rightVal}
+		return nativeBooleanToObject(leftVal != rightVal)
 	default:
 		return NULL
+	}
+}
+
+func nativeBooleanToObject(b bool) object.Object {
+	if b {
+		return TRUE
+	} else {
+		return FALSE
 	}
 }
 

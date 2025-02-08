@@ -55,14 +55,79 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return val
 		}
 		env.Set(node.Name.Value, val)
-
 	case *ast.Identifier:
 		return evalIdentifier(node, env)
+	case *ast.FunctionLiteral: // 对函数定义进行求值, 一般情况是将函数值存储在一个标识符里
+		params := node.Parameters
+		body := node.Body
+		return &object.Function{
+			Parameters: params,
+			Body:       body,
+			Env:        env, // 绑定函数定义时的环境,这是实现闭包的关键一步
+		}
+	case *ast.CallExpression: // 对函数调用表达式进行求值
+		function := Eval(node.Function, env) // node.Function 可能是一个函数字面量, 也可能是一个标识符.
+		if isError(function) {
+			return function
+		}
+		args := evalExpressions(node.Arguments, env) // 从左到右依次对实参求值
+		if len(args) == 1 && isError(args[0]) {
+			return args[0]
+		}
+
+		return applyFunction(function, args)
 	default:
 		return nil
 	}
 
 	return nil
+
+}
+
+// applyFunction 求值函数调用, 首先创建一个新的内部环境, 其 outer 指针指向函数定义的环境.
+// 然后将参数值绑定到内部环境中, 最后调用函数获取返回值.
+func applyFunction(fn object.Object, args []object.Object) object.Object {
+	function, ok := fn.(*object.Function)
+	if !ok {
+		return newError("not a function: %s", fn.Type())
+	}
+
+	extendedEnv := extendFunctionEnv(function, args)
+	evaluated := Eval(function.Body, extendedEnv)
+	return unwrapReturnValue(evaluated)
+}
+
+func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Environment {
+	env := object.NewEnclosedEnvironment(fn.Env)
+
+	for pIdx, p := range fn.Parameters {
+		env.Set(p.Value, args[pIdx])
+	}
+
+	return env
+}
+
+// unwrapReturnValue 防止return语句会向上冒泡多个函数并停止对所有这些函数求值
+func unwrapReturnValue(obj object.Object) object.Object {
+	returnValue, ok := obj.(*object.ReturnValue)
+	if ok {
+		return returnValue.Value
+	}
+	return obj
+}
+
+func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Object {
+	var result []object.Object
+
+	for _, e := range exps {
+		evaluated := Eval(e, env)
+		if isError(evaluated) {
+			return []object.Object{evaluated}
+		}
+		result = append(result, evaluated)
+	}
+
+	return result
 
 }
 
@@ -102,10 +167,7 @@ func isTruthy(obj object.Object) bool {
 	}
 }
 
-func evalInfixExpression(
-	operator string,
-	left, right object.Object,
-) object.Object {
+func evalInfixExpression(operator string, left, right object.Object) object.Object {
 	switch {
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
 		return evalIntegerInfixExpression(operator, left, right)

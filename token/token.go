@@ -44,6 +44,8 @@ const (
 	RETURN   = "RETURN"
 	TRUE     = "TRUE"
 	FALSE    = "FALSE"
+
+	STRING = "STRING"
 )
 
 // LookUpType 给定一个字母开头的字面量，返回其对应的 token 类型（IDENT | 语言中的关键词））

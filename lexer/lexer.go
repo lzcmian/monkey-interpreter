@@ -59,7 +59,9 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.LBRACE, '{')
 	case '}':
 		tok = newToken(token.RBRACE, '}')
-
+	case '"':
+		tok.Type = token.STRING
+		tok.Literal = l.readString()
 	// Identifiers + literals + Keywords
 	default:
 		if isLetter(l.ch) { // 以字母开头，只有可能是关键词或标识符（变量名）
@@ -102,6 +104,7 @@ func newToken(tokenType token.TokenType, ch byte) token.Token {
 }
 
 // readChar 将 lexer 的 ch 变为下一个字符，并更新 position、readPosition字段。若读完了，则将 ch 变为0
+// 为什么将 ch = 0 能够安全地表示读取完毕? 因为我们是逐字符读取, 用户不可能输入一个byte值 = 0的字符, 因为这需要通过多个字符来转义.
 func (l *Lexer) readChar() {
 	if l.readPosition >= len(l.input) { // 已经读完了
 		l.ch = 0
@@ -142,4 +145,16 @@ func (l *Lexer) peekChar() byte {
 		return 0
 	}
 	return l.input[l.readPosition]
+}
+
+func (l *Lexer) readString() string {
+	position := l.position + 1 // 字符串内容的第一个字符的位置
+	for {
+		l.readChar()
+		if l.ch == '"' || l.ch == 0 {
+			break
+		}
+	}
+
+	return l.input[position:l.position]
 }

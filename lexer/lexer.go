@@ -62,6 +62,10 @@ func (l *Lexer) NextToken() token.Token {
 	case '"':
 		tok.Type = token.STRING
 		tok.Literal = l.readString()
+	case '[':
+		tok = newToken(token.LBRACKET, '[')
+	case ']':
+		tok = newToken(token.RBRICKET, ']')
 	// Identifiers + literals + Keywords
 	default:
 		if isLetter(l.ch) { // 以字母开头，只有可能是关键词或标识符（变量名）
